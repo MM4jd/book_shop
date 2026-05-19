@@ -30,6 +30,7 @@ jobs:
           commit_message: "Add build artifact: app-${{ github.sha }}.tar.gz"
           file_pattern: 'artifacts/*.tar.gz'
           branch: dev
+          push_options: '--force'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
