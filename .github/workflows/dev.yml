@@ -15,15 +15,13 @@ jobs:
 
       - name: Create Unique Artifact
         run: |
-          # Use the commit SHA to create a unique filename for the audit trail [cite: 19, 81]
-          # We also create a generic 'app-artifact.tar.gz' for the Dockerfile to use easily
           tar -czf artifacts/app-${{ github.sha }}.tar.gz --exclude=artifacts --exclude=.git .
           cp artifacts/app-${{ github.sha }}.tar.gz artifacts/app-artifact.tar.gz
 
       - name: Commit Artifact to Repo
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          [cite_start]commit_message: "Add build artifact app-${{ github.sha }}.tar.gz for audit trail [cite: 20, 22]"
+          commit_message: "Add build artifact app-${{ github.sha }}.tar.gz for audit trail"
           file_pattern: 'artifacts/*.tar.gz'
           branch: dev
 
@@ -43,7 +41,6 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: dev-latest
         run: |
-          # The Dockerfile now builds from the artifact copied into it [cite: 23, 24]
           docker build -t $ECR_REGISTRY/book-shop-repo:$IMAGE_TAG .
           docker push $ECR_REGISTRY/book-shop-repo:$IMAGE_TAG
 
@@ -54,7 +51,6 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Automating the update of docker-compose.yml as required for Group of 3 
             export DEV_IMAGE=${{ steps.login-ecr.outputs.registry }}/book-shop-repo:dev-latest
             docker compose pull book-shop-dev
             docker compose up -d book-shop-dev
