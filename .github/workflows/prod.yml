@@ -1,0 +1,37 @@
+name: Prod Deployment (Promotion-Only)
+
+on:
+  push:
+    branches: [ prod ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Deploy to EC2 (Production)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ vars.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Pull version from GitHub Variable
+            export PROD_IMAGE=${{ steps.login-ecr.outputs.registry }}/book-shop-repo:${{ vars.IMAGE_VERSION }}
+            
+            docker pull $PROD_IMAGE
+            docker stop book-shop-prod || true
+            docker rm book-shop-prod || true
+            
+            # Run on Port 82 to coexist with Dev (80) and Test (81)
+            docker run -d --name book-shop-prod -p 82:8000 $PROD_IMAGE
