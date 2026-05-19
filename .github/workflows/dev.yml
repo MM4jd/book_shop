@@ -1,9 +1,8 @@
-name: dev-pipeline
+name: Dev Deployment (Artifact-First)
 
 on:
   push:
-    branches:
-      - dev
+    branches: [ dev ]
 
 jobs:
   build-and-deploy:
@@ -11,9 +10,25 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Create Unique Artifact
+        run: |
+          # Use the commit SHA to create a unique filename for the audit trail [cite: 19, 81]
+          # We also create a generic 'app-artifact.tar.gz' for the Dockerfile to use easily
+          tar -czf artifacts/app-${{ github.sha }}.tar.gz --exclude=artifacts --exclude=.git .
+          cp artifacts/app-${{ github.sha }}.tar.gz artifacts/app-artifact.tar.gz
+
+      - name: Commit Artifact to Repo
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          [cite_start]commit_message: "Add build artifact app-${{ github.sha }}.tar.gz for audit trail [cite: 20, 22]"
+          file_pattern: 'artifacts/*.tar.gz'
+          branch: dev
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -26,21 +41,20 @@ jobs:
       - name: Build and Push Docker Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: book-shop-repo
-          IMAGE_TAG: latest
+          IMAGE_TAG: dev-latest
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./book-shop
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # The Dockerfile now builds from the artifact copied into it [cite: 23, 24]
+          docker build -t $ECR_REGISTRY/book-shop-repo:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/book-shop-repo:$IMAGE_TAG
 
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@master
         with:
-          host: 3.76.126.6
+          host: ${{ vars.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
-            docker pull ${{ steps.login-ecr.outputs.registry }}/book-shop-repo:latest
-            docker stop book-shop-app || true
-            docker rm book-shop-app || true
-            docker run -d --name book-shop-app -p 80:8000 -e POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} ${{ steps.login-ecr.outputs.registry }}/book-shop-repo:latest
+            # Automating the update of docker-compose.yml as required for Group of 3 
+            export DEV_IMAGE=${{ steps.login-ecr.outputs.registry }}/book-shop-repo:dev-latest
+            docker compose pull book-shop-dev
+            docker compose up -d book-shop-dev
