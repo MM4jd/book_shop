@@ -54,6 +54,5 @@ jobs:
           script: |
             export DEV_IMAGE=${{ steps.login-ecr.outputs.registry }}/book-shop-repo:dev-latest
             docker pull $DEV_IMAGE
-            docker stop book-shop-dev || true
-            docker rm book-shop-dev || true
+            docker rm -f $(docker ps -aq) || true
             docker run -d --name book-shop-dev -p 80:8000 $DEV_IMAGE
